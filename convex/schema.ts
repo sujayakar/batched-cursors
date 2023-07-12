@@ -13,6 +13,7 @@ export default defineSchema({
 
     members: defineTable({
         user: v.string(),
+        name: v.string(),
         lastUpdate: v.number(),
     }).index("by_user", ["user"]),
 })

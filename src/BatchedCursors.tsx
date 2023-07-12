@@ -1,6 +1,33 @@
 import { RequestForQueries, useConvexAuth, useMutation, useQueries, useQuery } from "convex/react";
 import { MouseEvent, useCallback, useEffect, useMemo, useRef } from "react"
 import { api } from "../convex/_generated/api";
+import * as color from "@radix-ui/colors";
+
+const colorNames = [
+    "tomato",
+    "red",
+    "crimson",
+    "pink",
+    "plum",
+    "purple",
+    "violet",
+    "indigo",
+    "blue",
+    "cyan",
+    "teal",
+    "green",
+    "grass",
+    "orange",
+    "brown",
+    "sky",
+    "mint",
+    "lime",
+    "yellow",
+    "amber",
+];
+const colors = colorNames.map(name => {
+    return (color as any)[name][name + "11"];
+})
 
 const heightPx = 600;
 const widthPx = 800;
@@ -123,25 +150,26 @@ export default function BatchedCursors() {
     const queries = useMemo(() => {
         const q: RequestForQueries = {};
         for (const member of otherMembers ?? []) {
-            q[member] = {query: api.cursors.listCursors, args: {user: member}};
+            q[member.user] = {query: api.cursors.listCursors, args: {user: member.user}};
         }
         return q;
     }, [otherMembers]);
     const samples = useQueries(queries);
 
-    const latestSamples = useRef<{[user: string]: UnpackedCursorBuffer[]}>({});
+    const latestSamples = useRef<{[user: string]: {buffers: UnpackedCursorBuffer[], name: string}}>({});
     useEffect(() => {
-        const q: {[user: string]: UnpackedCursorBuffer[]} = {};
-        for (const [user, buffers] of Object.entries(samples)) {
-            if (!buffers) {
+        const q: {[user: string]: {name: string, buffers: UnpackedCursorBuffer[]}} = {};
+        for (const [user, r] of Object.entries(samples)) {
+            if (!r) {
                 continue;
             }
+            const {name, buffers} = r;
             if (!q[user]) {
-                q[user] = [];
+                q[user] = { name, buffers: [] };
             }
             for (const buffer of buffers) {
                 const unpacked = CursorBuffer.unpack(buffer);
-                q[user].push(unpacked);
+                q[user].buffers.push(unpacked);
             }
         }
         latestSamples.current = q;
@@ -164,14 +192,13 @@ export default function BatchedCursors() {
             return;
         }
         ctx.clearRect(0, 0, widthPx, heightPx);
-        ctx.fillStyle = "#000000";
 
         const now = performance.timeOrigin + performance.now();
         const samples = latestSamples.current;
 
         const st = renderState.current;
 
-        for (const [user, buffers] of Object.entries(samples)) {
+        for (const [user, {name, buffers}] of Object.entries(samples)) {
             if (buffers.length === 0) {
                 continue;
             }
@@ -208,13 +235,18 @@ export default function BatchedCursors() {
                 continue;
             }
 
+            ctx.fillStyle = colors[cyrb53(name) % colors.length];
             const x = buffer.x[j];
             const y = buffer.y[j];
             ctx.fillRect(x - 5, y - 5, 10, 10);
+            ctx.fillText(name, x + 12, y + 6);
         }
         if (currentCursor.current !== null) {
             const {x, y} = currentCursor.current;
+            ctx.fillStyle = "#000000";
             ctx.fillRect(x - 5, y - 5, 10, 10);
+            ctx.font = "16px sans-serif";
+            ctx.fillText("Me", x + 12, y + 6);
         }
 
     }, [requestRef]);
@@ -258,3 +290,18 @@ export default function BatchedCursors() {
             />
     )
 }
+
+const cyrb53 = (str: string, seed = 0) => {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for(let i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};

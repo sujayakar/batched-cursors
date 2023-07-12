@@ -1,6 +1,7 @@
-import { mutation, query } from "./_generated/server"
+import { internalMutation, mutation, query } from "./_generated/server"
 
 const MAX_MEMBER_AGE = 10 * 1000;
+const MAX_CURSOR_AGE = 60 * 1000;
 const BUFFER_HISTORY = 16;
 
 export const join = mutation(async ({auth, db}) => {
@@ -12,7 +13,7 @@ export const join = mutation(async ({auth, db}) => {
         .withIndex("by_user", q => q.eq("user", identity.subject))
         .first();
     if (row === null) {
-        await db.insert("members", {user: identity.subject, lastUpdate: Date.now()});
+        await db.insert("members", {user: identity.subject, name: identity.name ?? "🤷", lastUpdate: Date.now()});
     } else {
         await db.patch(row._id, {lastUpdate: Date.now()});
     }
@@ -49,7 +50,9 @@ export const otherMembers = query(async ({auth, db}) => {
             q.gte(q.field("lastUpdate"), Date.now() - MAX_MEMBER_AGE)),
         )
         .collect();
-    return rows.map(row => row.user);
+    return rows.map(row => {
+        return { user: row.user, name: row.name };
+    });
 });
 
 export const pushCursor = mutation(async ({auth, db}, { cursorBuffer }: any) => {
@@ -89,11 +92,28 @@ export const listCursors = query(async ({auth, db}, { user }: any) => {
     if (!identity) {
         throw new Error("Not authenticated");
     }
+    const row = await db.query("members")
+        .withIndex("by_user", q => q.eq("user", user))
+        .first();
+    if (!row) {
+        throw new Error(`No member row for ${user}`);
+    }
     const buffers = await db
         .query("cursors")
         .withIndex("by_user_start_ts", q => q.eq("user", user))
         .order("desc")
         .take(BUFFER_HISTORY);
     buffers.reverse();
-    return buffers;
+    return { buffers, name: row.name };
 });
+
+export const cleanup = internalMutation(async ({db}) => {
+    for await (const member of db.query("members")) {
+        const rows = await db.query("cursors")
+            .withIndex("by_user_start_ts", q => q.eq("user", member.user).lt("startTs", Date.now() - MAX_CURSOR_AGE))
+            .collect();
+        for (const row of rows) {
+            await db.delete(row._id);
+        }
+    }
+})

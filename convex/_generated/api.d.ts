@@ -14,6 +14,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as crons from "../crons";
 import type * as cursors from "../cursors";
 
 /**
@@ -25,6 +26,7 @@ import type * as cursors from "../cursors";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  crons: typeof crons;
   cursors: typeof cursors;
 }>;
 export declare const api: FilterApi<
