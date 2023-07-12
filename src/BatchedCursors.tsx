@@ -87,12 +87,12 @@ class CursorBuffer {
             if (t < lastT) {
                 throw new Error(`Non-monotonic time: ${t} < ${lastT}`);
             }
-            // // Overwrite the last sample if we're within our sampling interval.
-            // if (t - lastT < cursorInterval) {
-            //     this.x[(this.start + this.length - 1) % maxBufferLen] = x;
-            //     this.y[(this.start + this.length - 1) % maxBufferLen] = y;
-            //     return;
-            // }
+            // Overwrite the last sample if we're within our sampling interval.
+            if (t - lastT < cursorInterval) {
+                this.x[(this.start + this.length - 1) % maxBufferLen] = x;
+                this.y[(this.start + this.length - 1) % maxBufferLen] = y;
+                return;
+            }
         }
         // Drop the last sample if we're overflowing.
         if (this.length === maxBufferLen) {
@@ -239,6 +239,7 @@ export default function BatchedCursors() {
             const x = buffer.x[j];
             const y = buffer.y[j];
             ctx.fillRect(x - 5, y - 5, 10, 10);
+            ctx.font = "16px sans-serif";
             ctx.fillText(name, x + 12, y + 6);
         }
         if (currentCursor.current !== null) {
